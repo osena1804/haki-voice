@@ -1,0 +1,18 @@
+{
+  "1": {
+    "law": "Landlord and Tenant Act / Rent Restriction Act",
+    "excerpt": "Tenants are entitled to a written tenancy agreement, at least 30 days written notice before eviction (except in cases of serious breach), and return of their security deposit within a reasonable time after vacating, minus any legitimate deductions for damage."
+  },
+  "2": {
+    "law": "Employment Act 2007",
+    "excerpt": "Employees are entitled to a written contract stating terms of employment, timely payment of agreed wages, and notice before termination (length depends on how long they've worked). Termination without valid reason or due process may be unfair dismissal, which can be reported to the Labour Office."
+  },
+  "3": {
+    "law": "Sexual Offences Act 2006 / Protection Against Domestic Violence Act",
+    "excerpt": "Survivors of gender-based violence have the right to report to police, seek a protection order from a magistrate's court, and access free medical and psychosocial support through designated GBV recovery centres."
+  },
+  "4": {
+    "law": "Constitution of Kenya, Article 49",
+    "excerpt": "Arrested persons have the right to be informed of the reason for arrest, to remain silent, to communicate with an advocate, and to be brought before a court within 24 hours of arrest."
+  }
+}
