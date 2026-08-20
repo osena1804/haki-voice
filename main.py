@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv
 import africastalking
 from ai_helper import get_ai_guidance
+import sqlite3
+from fastapi.responses import HTMLResponse
 
 load_dotenv()
 
@@ -11,6 +13,7 @@ worker_number = os.getenv("LEGAL_AID_WORKER_NUMBER")
 
 africastalking.initialize(username, api_key)
 sms = africastalking.SMS
+airtime = africastalking.Airtime
 from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
 from database import init_db, log_case
@@ -34,6 +37,10 @@ def finalize_case(category, county, phoneNumber, category_names, category_messag
         except Exception as e:
             print(f"Escalation SMS failed: {e}")
 
+        try:
+            airtime.send(phone_number=phoneNumber, amount="50", currency_code="KES")
+        except Exception as e:
+            print(f"Airtime top-up failed: {e}")
         return "END Your case has been noted confidentially.\nNo message has been sent to this phone."
     else:
         message_to_send = ai_text if ai_text else category_messages[category]
@@ -50,6 +57,11 @@ def finalize_case(category, county, phoneNumber, category_names, category_messag
                 )
             except Exception as e:
                 print(f"Escalation SMS failed: {e}")
+
+            try:
+                airtime.send(phone_number=phoneNumber, amount="50", currency_code="KES")     
+            except Exception as e:
+                print(f"Airtime top-up failed: {e}")    
 
         log_case(phoneNumber, category_names[category], county, sensitive=0)
         return f"END You selected {category_names[category]}.\nAn SMS with your rights checklist has been sent."
@@ -120,3 +132,66 @@ async def ussd_handler(
         response = "END Invalid selection. Please dial again."
 
     return PlainTextResponse(content=response)
+
+@app.get("/dashboard")
+def dashboard():
+    conn = sqlite3.connect("hakivoice.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT category, county, COUNT(*) as count
+        FROM cases
+        GROUP BY category, county
+        ORDER BY count DESC
+    """)
+    rows = cursor.fetchall()
+
+    cursor.execute("SELECT COUNT(*) FROM cases")
+    total_cases = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM cases WHERE sensitive = 1")
+    sensitive_cases = cursor.fetchone()[0]
+
+    conn.close()
+
+    table_rows = ""
+    for category, county, count in rows:
+        table_rows += f"<tr><td>{category}</td><td>{county}</td><td>{count}</td></tr>"
+
+    html = f"""
+    <html>
+    <head>
+        <title>HakiVoice Policy Dashboard</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+            h1 {{ color: #d35400; }}
+            .stats {{ display: flex; gap: 20px; margin-bottom: 30px; }}
+            .stat-box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+            .stat-number {{ font-size: 32px; font-weight: bold; color: #27ae60; }}
+            table {{ width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #eee; }}
+            th {{ background: #d35400; color: white; }}
+        </style>
+    </head>
+    <body>
+        <h1>HakiVoice Policy Dashboard</h1>
+        <p>Anonymized case data for legal aid and policy advocacy</p>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number">{total_cases}</div>
+                <div>Total Cases</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">{sensitive_cases}</div>
+                <div>Sensitive Cases (handled confidentially)</div>
+            </div>
+        </div>
+        <table>
+            <tr><th>Category</th><th>County</th><th>Number of Cases</th></tr>
+            {table_rows}
+        </table>
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html)
