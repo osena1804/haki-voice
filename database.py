@@ -70,3 +70,17 @@ def severity_index():
             "escalation_rate_pct": pct,
         })
     return result
+
+def weekly_crisis_counts():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT strftime('%Y-%W', timestamp) as wk, COUNT(*) as n
+        FROM cases
+        WHERE sensitive = 1
+        GROUP BY wk
+        ORDER BY wk ASC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"week": wk, "dispatches": n} for wk, n in rows]
