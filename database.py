@@ -84,3 +84,26 @@ def weekly_crisis_counts():
     rows = cursor.fetchall()
     conn.close()
     return [{"week": wk, "dispatches": n} for wk, n in rows]
+
+def county_distribution():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT county, category, COUNT(*) as volume
+        FROM cases
+        GROUP BY county, category
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    by_county = {}
+    for r in rows:
+        entry = by_county.setdefault(r["county"], {"county": r["county"], "total": 0, "categories": {}})
+        entry["total"] += r["volume"]
+        entry["categories"][r["category"]] = r["volume"]
+
+    for entry in by_county.values():
+        entry["dominant_category"] = max(entry["categories"], key=entry["categories"].get)
+
+    return sorted(by_county.values(), key=lambda e: e["total"], reverse=True)
