@@ -17,7 +17,8 @@ sms = africastalking.SMS
 airtime = africastalking.Airtime
 from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
-from database import init_db, log_case
+from database import init_db, log_case, severity_index, weekly_crisis_counts, county_distribution
+
 
 app = FastAPI()
 init_db()
@@ -141,28 +142,39 @@ async def ussd_handler(
 
 @app.get("/dashboard")
 def dashboard():
-    conn = sqlite3.connect("hakivoice.db")
-    cursor = conn.cursor()
+    counties = county_distribution()
+    severity = severity_index()
+    crisis_trend = weekly_crisis_counts()
 
-    cursor.execute("""
-        SELECT category, county, COUNT(*) as count
-        FROM cases
-        GROUP BY category, county
-        ORDER BY count DESC
-    """)
-    rows = cursor.fetchall()
+    total_cases = sum(c["total"] for c in counties)
+    sensitive_cases = sum(w["dispatches"] for w in crisis_trend)
 
-    cursor.execute("SELECT COUNT(*) FROM cases")
-    total_cases = cursor.fetchone()[0]
+    max_county_total = max([c["total"] for c in counties], default=1)
 
-    cursor.execute("SELECT COUNT(*) FROM cases WHERE sensitive = 1")
-    sensitive_cases = cursor.fetchone()[0]
+    heatmap_rows = ""
+    for c in counties:
+        intensity = c["total"] / max_county_total
+        color = f"rgba(211, 84, 0, {0.15 + intensity * 0.7})"
+        heatmap_rows += f"""<tr style="background: {color};">
+            <td>{c['county']}</td>
+            <td>{c['total']}</td>
+            <td>{c['dominant_category']}</td>
+        </tr>"""
 
-    conn.close()
+    severity_rows = ""
+    for s in severity:
+        severity_rows += f"""<tr>
+            <td>{s['category']}</td>
+            <td>{s['total']}</td>
+            <td>{s['escalations']}</td>
+            <td>{s['escalation_rate_pct']}%</td>
+        </tr>"""
 
-    table_rows = ""
-    for category, county, count in rows:
-        table_rows += f"<tr><td>{category}</td><td>{county}</td><td>{count}</td></tr>"
+    trend_rows = ""
+    for w in crisis_trend:
+        trend_rows += f"<tr><td>{w['week']}</td><td>{w['dispatches']}</td></tr>"
+    if not crisis_trend:
+        trend_rows = "<tr><td colspan='2'>No crisis cases logged yet.</td></tr>"
 
     html = f"""
     <html>
@@ -171,6 +183,7 @@ def dashboard():
         <style>
             body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
             h1 {{ color: #d35400; }}
+            h2 {{ color: #d35400; font-size: 18px; margin-top: 40px; }}
             .stats {{ display: flex; gap: 20px; margin-bottom: 30px; }}
             .stat-box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
             .stat-number {{ font-size: 32px; font-weight: bold; color: #27ae60; }}
@@ -192,9 +205,23 @@ def dashboard():
                 <div>Sensitive Cases (handled confidentially)</div>
             </div>
         </div>
+
+        <h2>County Heatmap (darker = more cases)</h2>
         <table>
-            <tr><th>Category</th><th>County</th><th>Number of Cases</th></tr>
-            {table_rows}
+            <tr><th>County</th><th>Total Cases</th><th>Dominant Issue</th></tr>
+            {heatmap_rows}
+        </table>
+
+        <h2>Category Severity & Escalation Index</h2>
+        <table>
+            <tr><th>Category</th><th>Total</th><th>Escalated</th><th>Escalation Rate</th></tr>
+            {severity_rows}
+        </table>
+
+        <h2>Weekly Crisis Trend</h2>
+        <table>
+            <tr><th>Week</th><th>Crisis Dispatches</th></tr>
+            {trend_rows}
         </table>
     </body>
     </html>
