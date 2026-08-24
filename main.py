@@ -1,9 +1,10 @@
 import os
 from dotenv import load_dotenv
+from fastapi.responses import HTMLResponse
 import africastalking
 from ai_helper import get_ai_guidance
 import sqlite3
-from fastapi.responses import HTMLResponse
+
 
 load_dotenv()
 
@@ -28,7 +29,8 @@ def read_root():
 def finalize_case(category, county, phoneNumber, category_names, category_messages, ai_text):
     if category == "3":
         # GBV - no SMS to user, safety by design. Escalate to worker instead.
-        log_case(phoneNumber, category_names[category], county, sensitive=1)
+        log_case(phoneNumber, category_names[category], county, sensitive=1, escalated=1)
+
         try:
             sms.send(
                 f"URGENT: GBV case reported in {county}. Caller: {phoneNumber}. Please follow up discreetly.",
@@ -41,13 +43,18 @@ def finalize_case(category, county, phoneNumber, category_names, category_messag
             airtime.send(phone_number=phoneNumber, amount="50", currency_code="KES")
         except Exception as e:
             print(f"Airtime top-up failed: {e}")
+
         return "END Your case has been noted confidentially.\nNo message has been sent to this phone."
+
     else:
         message_to_send = ai_text if ai_text else category_messages[category]
         try:
             sms.send(message_to_send, [phoneNumber])
         except Exception as e:
             print(f"SMS failed: {e}")
+
+        is_escalated = 1 if category == "4" else 0
+        log_case(phoneNumber, category_names[category], county, sensitive=0, escalated=is_escalated)
 
         if category == "4":
             try:
@@ -59,11 +66,10 @@ def finalize_case(category, county, phoneNumber, category_names, category_messag
                 print(f"Escalation SMS failed: {e}")
 
             try:
-                airtime.send(phone_number=phoneNumber, amount="50", currency_code="KES")     
+                airtime.send(phone_number=phoneNumber, amount="50", currency_code="KES")
             except Exception as e:
-                print(f"Airtime top-up failed: {e}")    
+                print(f"Airtime top-up failed: {e}")
 
-        log_case(phoneNumber, category_names[category], county, sensitive=0)
         return f"END You selected {category_names[category]}.\nAn SMS with your rights checklist has been sent."
 
 @app.post("/ussd")
