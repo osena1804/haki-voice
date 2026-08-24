@@ -25,7 +25,8 @@ def init_db():
             phone_number TEXT,
             category TEXT,
             county TEXT,
-            sensitive INTEGER,
+            sensitive INTEGER DEFAULT 0,
+            escalated INTEGER DEFAULT 0,
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -33,13 +34,39 @@ def init_db():
     conn.close()
 
 
-def log_case(phone_number, category, county, sensitive):
+def log_case(phone_number, category, county, sensitive, escalated=0):
     hashed = _hash_phone(phone_number)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO cases (phone_number, category, county, sensitive) VALUES (?, ?, ?, ?)",
-        (hashed, category, county, sensitive)
+        "INSERT INTO cases (phone_number, category, county, sensitive, escalated) VALUES (?, ?, ?, ?, ?)",
+        (hashed, category, county, sensitive, escalated)
     )
     conn.commit()
     conn.close()
+
+def severity_index():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT category,
+               COUNT(*) as total,
+               SUM(CASE WHEN escalated = 1 THEN 1 ELSE 0 END) as escalations
+        FROM cases
+        GROUP BY category
+        ORDER BY total DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for r in rows:
+        pct = round(100 * r["escalations"] / r["total"], 1) if r["total"] else 0.0
+        result.append({
+            "category": r["category"],
+            "total": r["total"],
+            "escalations": r["escalations"],
+            "escalation_rate_pct": pct,
+        })
+    return result
