@@ -1,6 +1,7 @@
 # HakiVoice
 
 USSD, SMS, and Airtime-powered legal aid platform for Kenya, built on Africa's Talking APIs.
+[Watch the 6-minute demo video](https://youtu.be/g8dzGwbXBu4)
 
 ## The problem
 
@@ -93,14 +94,18 @@ uvicorn main:app --reload
 ## Running with Docker
 
 ```bash
-docker build -t hakivoice .
-docker run -d -p 8000:8000 --env-file .env --name hakivoice-app hakivoice
+# Standard Local Run
+uvicorn main:app --reload
+
+# Docker Run with live volume mount
+docker run -d -p 8000:8000 --env-file .env -v ${PWD}:/app --name hakivoice-app hakivoice
 ```
 
 ## Endpoints
 
 - `POST /ussd` — Africa's Talking USSD webhook
 - `GET /dashboard` — heatmap, severity index, and crisis trend for policy/CSO use
+- `GET /api/dashboard` — Structured JSON payload for raw analytics & frontend integration
 - `GET /` — health check
 
 ## What production would need (beyond this hackathon build)
